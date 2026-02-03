@@ -10,7 +10,10 @@ const Home: React.FC = () => {
         <h1 className="logo">✨ SheRise</h1>
         <div className="nav-buttons">
           <button className="login-btn">Login</button>
-          <button className="signup-btn">Create Account</button>
+          <a href="/register">
+  <button className="signup-btn">Create Account</button>
+</a>
+
         </div>
       </nav>
 
