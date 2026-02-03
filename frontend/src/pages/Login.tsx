@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import "../styles/Register.css";
+import { useNavigate } from "react-router-dom";
+import "../styles/Login.css";
 
-const Register = () => {
+const Login = () => {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
-    password: "",
-    phone: ""
+    password: ""
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,7 +21,7 @@ const Register = () => {
     e.preventDefault();
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/register", {
+      const response = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -31,43 +32,29 @@ const Register = () => {
       const data = await response.json();
 
       if (response.ok) {
-        alert("Account Created Successfully!");
+        alert("Login Successful!");
+        localStorage.setItem("token", data.token);
+        window.location.href = "/dashboard";
       } else {
         alert(data.message);
       }
 
-    } catch (error) {
+    } catch {
       alert("Server error. Try again later.");
     }
   };
 
   return (
-    <div className="register-container">
-      <div className="register-box">
-        <h2>Create Account</h2>
+    <div className="login-container">
+      <div className="login-box">
+        <h2>Login</h2>
 
         <form onSubmit={handleSubmit}>
-
-          <input
-            type="text"
-            name="name"
-            placeholder="Full Name"
-            onChange={handleChange}
-            required
-          />
 
           <input
             type="email"
             name="email"
             placeholder="Email"
-            onChange={handleChange}
-            required
-          />
-
-          <input
-            type="text"
-            name="phone"
-            placeholder="Phone Number"
             onChange={handleChange}
             required
           />
@@ -80,13 +67,12 @@ const Register = () => {
             required
           />
 
-          <button type="submit">Create Account</button>
+          <button type="submit">Login</button>
 
-<p className="login-link">
-  Already have an account? 
-  <a href="/login"> Login</a>
-</p>
-
+          <p className="register-link">
+            Don't have an account? 
+            <span onClick={() => navigate("/register")}> Register</span>
+          </p>
 
         </form>
       </div>
@@ -94,4 +80,4 @@ const Register = () => {
   );
 };
 
-export default Register;
+export default Login;

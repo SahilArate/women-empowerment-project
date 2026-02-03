@@ -9,7 +9,9 @@ const Home: React.FC = () => {
       <nav className="navbar">
         <h1 className="logo">✨ SheRise</h1>
         <div className="nav-buttons">
+          <a href="/login">
           <button className="login-btn">Login</button>
+          </a>
           <a href="/register">
   <button className="signup-btn">Create Account</button>
 </a>
