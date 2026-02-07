@@ -1,7 +1,91 @@
+/* Health Page Layout */
+.health-page {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+  transition: 0.3s ease;
+  padding: 20px;
+  overflow-y: auto;
+  height: 100vh;
+  position: relative;
+  z-index: 100;
+}
+
+.sidebar.open {
+  width: 260px;
+}
+
+.sidebar.closed {
+  width: 60px;
+}
+
+.toggle-btn {
+  font-size: 24px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.sidebar-title {
+  margin-bottom: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar.closed .sidebar-title {
+  display: none;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar li {
+  padding: 12px;
+  margin: 10px 0;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: 0.3s;
+}
+
+.sidebar li a {
+  color: white;
+  text-decoration: none;
+  display: block;
+}
+
+.sidebar li:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar li.active {
+  background-color: rgba(255, 255, 255, 0.3);
+  font-weight: 600;
+}
+
+.sidebar.closed li {
+  text-align: center;
+  padding: 12px 5px;
+}
+
+/* Main Content Area */
+.health-main-content {
+  flex: 1;
+  overflow-y: auto;
+  background: #e0f2fe;
+}
+
 /* Health Container */
 .health-container {
-  min-height: 100vh;
-  background: #e0f2fe;
+  min-height: 100%;
   padding: 20px;
   padding-bottom: 100px;
 }
@@ -707,7 +791,30 @@
 }
 
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .sidebar.open {
+    width: 220px;
+  }
+}
+
 @media (max-width: 768px) {
+  .health-page {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    height: auto;
+    width: 100% !important;
+  }
+
+  .sidebar.closed {
+    height: 60px;
+  }
+
+  .sidebar.closed ul {
+    display: none;
+  }
+
   .health-header h1 {
     font-size: 1.8rem;
   }
@@ -775,23 +882,31 @@
 
 /* Scrollbar Styling */
 .messages-container::-webkit-scrollbar,
-.entries-list::-webkit-scrollbar {
+.entries-list::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.health-main-content::-webkit-scrollbar {
   width: 6px;
 }
 
 .messages-container::-webkit-scrollbar-track,
-.entries-list::-webkit-scrollbar-track {
+.entries-list::-webkit-scrollbar-track,
+.sidebar::-webkit-scrollbar-track,
+.health-main-content::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 10px;
 }
 
 .messages-container::-webkit-scrollbar-thumb,
-.entries-list::-webkit-scrollbar-thumb {
+.entries-list::-webkit-scrollbar-thumb,
+.sidebar::-webkit-scrollbar-thumb,
+.health-main-content::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 10px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover,
-.entries-list::-webkit-scrollbar-thumb:hover {
+.entries-list::-webkit-scrollbar-thumb:hover,
+.sidebar::-webkit-scrollbar-thumb:hover,
+.health-main-content::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }

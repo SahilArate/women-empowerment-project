@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import "../styles/Health.css";
 
-// Backend API URL - Update this based on your setup
-const API_URL = "http://localhost:5000/api";
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
 interface MenstrualEntry {
   date: string;
@@ -10,587 +12,462 @@ interface MenstrualEntry {
   symptoms: string[];
 }
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface ApiErrorResponse {
-  error: string;
-  details?: string;
-}
-
-// Type guard for error objects
-const isErrorWithMessage = (error: unknown): error is Error => {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as Record<string, unknown>).message === "string"
-  );
-};
-
-// Helper to get error message
-const getErrorMessage = (error: unknown): string => {
-  if (isErrorWithMessage(error)) {
-    return error.message;
-  }
-  return String(error);
-};
-
 const Health = () => {
-  // Menstrual Cycle Tracker State
-  const [menstrualEntries, setMenstrualEntries] = useState<MenstrualEntry[]>([]);
-  const [selectedDate, setSelectedDate] = useState("");
-  const [flowIntensity, setFlowIntensity] = useState("medium");
-  const [symptoms, setSymptoms] = useState<string[]>([]);
+  const [open, setOpen] = useState(true);
+  const [activeSection, setActiveSection] = useState("overview");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Menstrual Tracker State
+  const [entries, setEntries] = useState<MenstrualEntry[]>([]);
+  const [currentDate, setCurrentDate] = useState("");
+  const [flow, setFlow] = useState("light");
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   // BMI Calculator State
-  const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
   const [bmi, setBmi] = useState<number | null>(null);
-  const [bmiCategory, setBmiCategory] = useState("");
 
-  // Chatbot State
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content: "Hello! I'm your Women's Health Assistant. I can help you with health questions, provide wellness tips, and support you with reproductive health, mental well-being, and general health queries. How can I assist you today?",
-    },
-  ]);
-  const [userInput, setUserInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Active section state
-  const [activeSection, setActiveSection] = useState("overview");
-
-  // Scroll to bottom of chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Menstrual Cycle Functions
-  const handleAddEntry = () => {
-    if (selectedDate) {
-      const newEntry: MenstrualEntry = {
-        date: selectedDate,
-        flow: flowIntensity,
-        symptoms: symptoms,
-      };
-      setMenstrualEntries([...menstrualEntries, newEntry]);
-      setSelectedDate("");
-      setFlowIntensity("medium");
-      setSymptoms([]);
-      alert("Entry added successfully!");
-    }
-  };
+  const symptoms = [
+    "Cramps",
+    "Headache",
+    "Fatigue",
+    "Mood Swings",
+    "Bloating",
+    "Back Pain",
+  ];
 
   const toggleSymptom = (symptom: string) => {
-    setSymptoms((prev) =>
-      prev.includes(symptom)
-        ? prev.filter((s) => s !== symptom)
-        : [...prev, symptom]
-    );
-  };
-
-  // BMI Calculator
-  const calculateBMI = () => {
-    if (height && weight) {
-      const heightInMeters = parseFloat(height) / 100;
-      const weightInKg = parseFloat(weight);
-      const calculatedBMI = weightInKg / (heightInMeters * heightInMeters);
-      setBmi(parseFloat(calculatedBMI.toFixed(1)));
-
-      if (calculatedBMI < 18.5) {
-        setBmiCategory("Underweight");
-      } else if (calculatedBMI >= 18.5 && calculatedBMI < 25) {
-        setBmiCategory("Normal weight");
-      } else if (calculatedBMI >= 25 && calculatedBMI < 30) {
-        setBmiCategory("Overweight");
-      } else {
-        setBmiCategory("Obese");
-      }
+    if (selectedSymptoms.includes(symptom)) {
+      setSelectedSymptoms(selectedSymptoms.filter((s) => s !== symptom));
+    } else {
+      setSelectedSymptoms([...selectedSymptoms, symptom]);
     }
   };
 
-  // Chatbot Function - Updated to call backend API with proper TypeScript types
-  const sendMessage = async () => {
-    if (!userInput.trim()) return;
+  const addEntry = () => {
+    if (!currentDate) {
+      alert("Please select a date");
+      return;
+    }
 
-    const userMessage: Message = {
-      role: "user",
-      content: userInput,
+    const newEntry: MenstrualEntry = {
+      date: currentDate,
+      flow: flow,
+      symptoms: selectedSymptoms,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    const currentInput = userInput;
-    setUserInput("");
-    setIsLoading(true);
+    setEntries([newEntry, ...entries]);
+    setCurrentDate("");
+    setFlow("light");
+    setSelectedSymptoms([]);
+    alert("Entry added successfully!");
+  };
+
+  const calculateBMI = () => {
+    const w = parseFloat(weight);
+    const h = parseFloat(height) / 100;
+
+    if (w > 0 && h > 0) {
+      const bmiValue = w / (h * h);
+      setBmi(parseFloat(bmiValue.toFixed(1)));
+    }
+  };
+
+  const getBMICategory = (bmi: number) => {
+    if (bmi < 18.5) return "Underweight";
+    if (bmi < 25) return "Normal weight";
+    if (bmi < 30) return "Overweight";
+    return "Obese";
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMessage: Message = { role: "user", content: input };
+    setMessages([...messages, userMessage]);
+    setInput("");
+    setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: currentInput,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input }),
       });
 
-      // Check if response is ok
-      if (!response.ok) {
-        const errorData: ApiErrorResponse = await response.json();
-        console.error("API Error Response:", errorData);
-        
-        // Handle specific error types
-        if (response.status === 400) {
-          throw new Error("Invalid request. Please try again.");
-        } else if (response.status === 403) {
-          throw new Error("API permission denied. Please contact support.");
-        } else if (response.status === 429) {
-          throw new Error("Too many requests. Please wait a moment and try again.");
-        } else if (response.status === 500) {
-          throw new Error(errorData.error || "Server error. Please try again later.");
-        } else {
-          throw new Error(errorData.error || `Error: ${response.status}`);
-        }
-      }
-
       const data = await response.json();
-      
-      // Check if we have valid response data
-      if (!data.reply) {
-        console.error("Invalid API response structure:", data);
-        throw new Error("Received invalid response. Please try again.");
-      }
-
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.reply,
+        content: data.reply || "Sorry, I couldn't get a response.",
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      
-    } catch (error: unknown) {
-      console.error("Chatbot Error:", error);
-      
-      const errorMsg = getErrorMessage(error);
-      let errorMessageText = "I encountered an error: ";
-      
-      if (errorMsg.includes("Failed to fetch")) {
-        errorMessageText = "❌ Network Error\n\nCouldn't connect to the server. Please check:\n" +
-                          "• Your internet connection\n" +
-                          "• Backend server is running (npm start in backend folder)\n" +
-                          "• Backend is running on http://localhost:5000\n" +
-                          "• CORS is properly configured";
-      } else {
-        errorMessageText = "❌ " + errorMsg;
-      }
-      
+    } catch (error) {
       const errorMessage: Message = {
         role: "assistant",
-        content: errorMessageText,
+        content: "Sorry, there was an error connecting to the server.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  return (
-    <div className="health-container">
-      {/* Header */}
-      <div className="health-header">
-        <h1>🌸 Women's Health Hub 🌸</h1>
-        <p>Your Complete Wellness Companion</p>
-      </div>
-
-      {/* Navigation */}
-      <div className="health-nav">
-        <button
-          className={activeSection === "overview" ? "active" : ""}
-          onClick={() => setActiveSection("overview")}
-        >
-          🏠 Overview
-        </button>
-        <button
-          className={activeSection === "menstrual" ? "active" : ""}
-          onClick={() => setActiveSection("menstrual")}
-        >
-          📅 Menstrual Tracker
-        </button>
-        <button
-          className={activeSection === "fitness" ? "active" : ""}
-          onClick={() => setActiveSection("fitness")}
-        >
-          💪 Fitness & Nutrition
-        </button>
-        <button
-          className={activeSection === "reproductive" ? "active" : ""}
-          onClick={() => setActiveSection("reproductive")}
-        >
-          🩺 Reproductive Health
-        </button>
-        <button
-          className={activeSection === "mental" ? "active" : ""}
-          onClick={() => setActiveSection("mental")}
-        >
-          🧠 Mental Health
-        </button>
-        <button
-          className={activeSection === "tools" ? "active" : ""}
-          onClick={() => setActiveSection("tools")}
-        >
-          🔧 Health Tools
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="health-content">
-        {/* Overview Section */}
-        {activeSection === "overview" && (
+  const renderSection = () => {
+    switch (activeSection) {
+      case "overview":
+        return (
           <div className="section-content">
-            <h2>Welcome to Your Health Hub</h2>
+            <h2>Women's Health Overview</h2>
             <div className="health-cards">
               <div className="health-card">
-                <div className="card-icon">📅</div>
-                <h3>Menstrual Cycle Tracker</h3>
-                <p>
-                  Track your periods, symptoms, and patterns. Understand your
-                  body better with detailed cycle insights.
-                </p>
-              </div>
-              <div className="health-card">
-                <div className="card-icon">💪</div>
-                <h3>Fitness & Nutrition</h3>
-                <p>
-                  Personalized exercise routines and nutritional guidance
-                  tailored for women's health needs.
-                </p>
-              </div>
-              <div className="health-card">
                 <div className="card-icon">🩺</div>
-                <h3>Reproductive Health</h3>
+                <h3>Regular Checkups</h3>
                 <p>
-                  Comprehensive information about contraception, pregnancy
-                  planning, and sexual wellness.
+                  Schedule annual health screenings and gynecological exams to
+                  maintain optimal health.
                 </p>
               </div>
+
               <div className="health-card">
-                <div className="card-icon">🧠</div>
-                <h3>Mental Well-Being</h3>
+                <div className="card-icon">💊</div>
+                <h3>Preventive Care</h3>
                 <p>
-                  Resources for stress management, emotional health, and
-                  mindfulness practices.
+                  Stay up to date with vaccinations, screenings, and preventive
+                  measures.
+                </p>
+              </div>
+
+              <div className="health-card">
+                <div className="card-icon">🏃‍♀️</div>
+                <h3>Active Lifestyle</h3>
+                <p>
+                  Regular exercise and balanced nutrition are key to long-term
+                  health.
+                </p>
+              </div>
+
+              <div className="health-card">
+                <div className="card-icon">🧘‍♀️</div>
+                <h3>Mental Wellness</h3>
+                <p>
+                  Prioritize mental health through mindfulness, therapy, and
+                  self-care.
                 </p>
               </div>
             </div>
 
-            {/* Emergency Contacts */}
             <div className="emergency-contacts">
-              <h3>🚨 Emergency Contacts</h3>
+              <h3>🚨 Emergency Health Contacts</h3>
               <div className="contact-grid">
                 <div className="contact-card">
-                  <strong>Emergency</strong>
-                  <p>108 / 112</p>
+                  <strong>Ambulance</strong>
+                  <p>108 / 102</p>
                 </div>
                 <div className="contact-card">
-                  <strong>Women's Helpline</strong>
-                  <p>1091 / 181</p>
+                  <strong>Women Helpline</strong>
+                  <p>1091</p>
                 </div>
                 <div className="contact-card">
                   <strong>Mental Health</strong>
-                  <p>1800-599-0019</p>
+                  <p>9152987821</p>
                 </div>
                 <div className="contact-card">
-                  <strong>Ambulance</strong>
-                  <p>102</p>
+                  <strong>Pregnancy Helpline</strong>
+                  <p>104</p>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Menstrual Tracker Section */}
-        {activeSection === "menstrual" && (
+      case "menstrual":
+        return (
           <div className="section-content">
-            <h2>Menstrual Cycle Tracker</h2>
+            <h2>Menstrual Health Tracker</h2>
             <div className="tracker-container">
               <div className="tracker-form">
                 <h3>Add New Entry</h3>
+
                 <div className="form-group">
-                  <label>Date:</label>
+                  <label>Date</label>
                   <input
                     type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    value={currentDate}
+                    onChange={(e) => setCurrentDate(e.target.value)}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Flow Intensity:</label>
-                  <select
-                    value={flowIntensity}
-                    onChange={(e) => setFlowIntensity(e.target.value)}
-                  >
+                  <label>Flow Intensity</label>
+                  <select value={flow} onChange={(e) => setFlow(e.target.value)}>
                     <option value="light">Light</option>
                     <option value="medium">Medium</option>
                     <option value="heavy">Heavy</option>
                   </select>
                 </div>
+
                 <div className="form-group">
-                  <label>Symptoms:</label>
+                  <label>Symptoms</label>
                   <div className="symptoms-grid">
-                    {["Cramps", "Fatigue", "Headache", "Mood Swings", "Bloating", "Back Pain"].map(
-                      (symptom) => (
-                        <button
-                          key={symptom}
-                          className={`symptom-btn ${
-                            symptoms.includes(symptom) ? "active" : ""
-                          }`}
-                          onClick={() => toggleSymptom(symptom)}
-                        >
-                          {symptom}
-                        </button>
-                      )
-                    )}
+                    {symptoms.map((symptom) => (
+                      <button
+                        key={symptom}
+                        type="button"
+                        className={`symptom-btn ${
+                          selectedSymptoms.includes(symptom) ? "active" : ""
+                        }`}
+                        onClick={() => toggleSymptom(symptom)}
+                      >
+                        {symptom}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <button className="add-entry-btn" onClick={handleAddEntry}>
+
+                <button className="add-entry-btn" onClick={addEntry}>
                   Add Entry
                 </button>
               </div>
 
               <div className="tracker-history">
-                <h3>Cycle History</h3>
-                {menstrualEntries.length === 0 ? (
-                  <div className="no-entries">
-                    No entries yet. Start tracking your cycle!
-                  </div>
+                <h3>Your History</h3>
+                {entries.length === 0 ? (
+                  <p className="no-entries">No entries yet. Start tracking!</p>
                 ) : (
                   <div className="entries-list">
-                    {menstrualEntries
-                      .slice()
-                      .reverse()
-                      .map((entry, index) => (
-                        <div key={index} className="entry-card">
-                          <div className="entry-date">
-                            {new Date(entry.date).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </div>
-                          <div className="entry-flow">
-                            Flow: <span>{entry.flow}</span>
-                          </div>
-                          {entry.symptoms.length > 0 && (
-                            <div className="entry-symptoms">
-                              Symptoms: {entry.symptoms.join(", ")}
-                            </div>
-                          )}
+                    {entries.map((entry, index) => (
+                      <div key={index} className="entry-card">
+                        <div className="entry-date">{entry.date}</div>
+                        <div className="entry-flow">
+                          Flow: <span>{entry.flow}</span>
                         </div>
-                      ))}
+                        {entry.symptoms.length > 0 && (
+                          <div className="entry-symptoms">
+                            Symptoms: {entry.symptoms.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Fitness Section */}
-        {activeSection === "fitness" && (
+      case "fitness":
+        return (
           <div className="section-content">
-            <h2>Fitness & Nutrition Guide</h2>
+            <h2>Fitness & Nutrition</h2>
             <div className="fitness-grid">
               <div className="fitness-card">
-                <h3>🏃‍♀️ Exercise Recommendations</h3>
+                <h3>Exercise Recommendations</h3>
                 <ul>
-                  <li>Cardio: 150 minutes moderate intensity per week</li>
-                  <li>Strength training: 2-3 times per week</li>
-                  <li>Yoga or Pilates for flexibility and core strength</li>
-                  <li>Walking: 10,000 steps daily goal</li>
-                  <li>Rest days: 1-2 days per week for recovery</li>
+                  <li>30 minutes of moderate cardio daily</li>
+                  <li>Strength training 2-3 times per week</li>
+                  <li>Yoga or stretching for flexibility</li>
+                  <li>Pelvic floor exercises</li>
+                  <li>Walking 10,000 steps daily</li>
                 </ul>
               </div>
+
               <div className="fitness-card">
-                <h3>🥗 Nutrition Essentials</h3>
+                <h3>Nutrition Tips</h3>
                 <ul>
-                  <li>Iron-rich foods: Spinach, lentils, lean meats</li>
-                  <li>Calcium sources: Dairy, fortified foods, leafy greens</li>
-                  <li>Omega-3 fatty acids: Fish, walnuts, chia seeds</li>
-                  <li>Protein: 0.8g per kg body weight daily</li>
-                  <li>Hydration: 8-10 glasses of water daily</li>
+                  <li>Iron-rich foods for energy</li>
+                  <li>Calcium for bone health</li>
+                  <li>Omega-3 fatty acids</li>
+                  <li>Plenty of fruits and vegetables</li>
+                  <li>Stay hydrated - 8 glasses of water daily</li>
                 </ul>
               </div>
+
               <div className="fitness-card">
-                <h3>🍎 Healthy Eating Tips</h3>
+                <h3>Healthy Habits</h3>
                 <ul>
-                  <li>Eat a rainbow of colorful fruits and vegetables</li>
-                  <li>Choose whole grains over refined carbs</li>
-                  <li>Limit processed foods and added sugars</li>
-                  <li>Practice mindful eating and portion control</li>
-                  <li>Plan meals ahead to make healthier choices</li>
+                  <li>7-9 hours of quality sleep</li>
+                  <li>Limit processed foods and sugar</li>
+                  <li>Manage stress through meditation</li>
+                  <li>Avoid smoking and excessive alcohol</li>
+                  <li>Regular health screenings</li>
                 </ul>
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Reproductive Health Section */}
-        {activeSection === "reproductive" && (
+      case "reproductive":
+        return (
           <div className="section-content">
-            <h2>Reproductive Health Information</h2>
+            <h2>Reproductive Health</h2>
             <div className="reproductive-content">
               <div className="info-card">
-                <h3>📚 Essential Information</h3>
+                <h3>Important Information</h3>
                 <div className="info-topics">
                   <div className="topic">
-                    <strong>Menstrual Health</strong>
+                    <strong>Contraception</strong>
                     <p>
-                      Understanding your cycle, managing symptoms, and
-                      recognizing abnormalities. Normal cycles range from 21-35
-                      days.
+                      Consult with your healthcare provider to choose the right
+                      contraceptive method. Options include pills, IUDs, implants,
+                      and barrier methods.
                     </p>
                   </div>
-                  <div className="topic">
-                    <strong>Contraception Options</strong>
-                    <p>
-                      Pills, IUDs, barrier methods, implants, and natural
-                      family planning. Consult healthcare provider for
-                      personalized advice.
-                    </p>
-                  </div>
+
                   <div className="topic">
                     <strong>Pregnancy Planning</strong>
                     <p>
-                      Preconception care, folic acid supplementation, healthy
-                      lifestyle choices, and fertility awareness.
+                      Pre-conception health is crucial. Start taking folic acid,
+                      maintain a healthy weight, and schedule preconception
+                      checkups.
                     </p>
                   </div>
+
                   <div className="topic">
-                    <strong>Sexual Health</strong>
+                    <strong>STI Prevention</strong>
                     <p>
-                      STI prevention, regular screenings, safe practices, and
-                      open communication with partners.
+                      Use protection, get regular screenings, and communicate
+                      openly with your partner. Early detection is key.
                     </p>
                   </div>
+
                   <div className="topic">
-                    <strong>PCOS & Endometriosis</strong>
+                    <strong>Menopause</strong>
                     <p>
-                      Common conditions affecting women. Symptoms, diagnosis,
-                      and management strategies available.
+                      Typically occurs between 45-55 years. Symptoms include hot
+                      flashes, mood changes, and irregular periods. Consult your
+                      doctor for management options.
+                    </p>
+                  </div>
+
+                  <div className="topic">
+                    <strong>PCOS Awareness</strong>
+                    <p>
+                      Polycystic Ovary Syndrome affects hormone levels. Symptoms
+                      include irregular periods, excess hair growth, and weight
+                      gain. Seek medical guidance for proper management.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Mental Health Section */}
-        {activeSection === "mental" && (
+      case "mental":
+        return (
           <div className="section-content">
-            <h2>Mental Health & Well-Being</h2>
+            <h2>Mental Health & Well-being</h2>
             <div className="mental-health-grid">
               <div className="mental-card">
-                <h3>🧘‍♀️ Stress Management</h3>
+                <h3>Self-Care Practices</h3>
                 <ul>
-                  <li>Deep breathing exercises (5 min daily)</li>
-                  <li>Progressive muscle relaxation</li>
-                  <li>Mindfulness meditation</li>
-                  <li>Journaling your thoughts</li>
-                  <li>Regular physical activity</li>
-                </ul>
-              </div>
-              <div className="mental-card">
-                <h3>💭 Emotional Wellness</h3>
-                <ul>
-                  <li>Recognize and validate your feelings</li>
-                  <li>Build strong support networks</li>
+                  <li>Practice daily meditation or mindfulness</li>
+                  <li>Maintain a gratitude journal</li>
                   <li>Set healthy boundaries</li>
-                  <li>Practice self-compassion</li>
-                  <li>Seek professional help when needed</li>
+                  <li>Take breaks and rest when needed</li>
+                  <li>Engage in hobbies you enjoy</li>
                 </ul>
               </div>
+
               <div className="mental-card">
-                <h3>🌟 Self-Care Practices</h3>
+                <h3>Stress Management</h3>
                 <ul>
-                  <li>Daily gratitude practice</li>
-                  <li>Engage in hobbies you love</li>
-                  <li>Spend time in nature</li>
-                  <li>Connect with loved ones</li>
-                  <li>Adequate rest and relaxation</li>
+                  <li>Deep breathing exercises</li>
+                  <li>Progressive muscle relaxation</li>
+                  <li>Regular physical activity</li>
+                  <li>Connect with supportive friends</li>
+                  <li>Limit social media consumption</li>
+                </ul>
+              </div>
+
+              <div className="mental-card">
+                <h3>When to Seek Help</h3>
+                <ul>
+                  <li>Persistent sadness or anxiety</li>
+                  <li>Changes in sleep or appetite</li>
+                  <li>Difficulty concentrating</li>
+                  <li>Withdrawal from activities</li>
+                  <li>Thoughts of self-harm</li>
                 </ul>
               </div>
             </div>
+
             <div className="crisis-support">
               <h3>⚠️ Crisis Support</h3>
               <p>
-                If you're experiencing a mental health crisis, please reach out:
+                If you're experiencing a mental health crisis, please reach out
+                immediately:
               </p>
               <div className="crisis-contacts">
                 <div>
                   <strong>National Mental Health Helpline:</strong> 1800-599-0019
                 </div>
                 <div>
-                  <strong>Vandrevala Foundation:</strong> 1860-2662-345
+                  <strong>Vandrevala Foundation:</strong> 9999 666 555
                 </div>
                 <div>
-                  <strong>iCall:</strong> 9152987821
+                  <strong>iCall (TISS):</strong> 9152987821
+                </div>
+                <div>
+                  <strong>Emergency:</strong> 112
                 </div>
               </div>
             </div>
           </div>
-        )}
+        );
 
-        {/* Health Tools Section */}
-        {activeSection === "tools" && (
+      case "tools":
+        return (
           <div className="section-content">
-            <h2>Health Tools & Calculators</h2>
+            <h2>Health Tools</h2>
             <div className="tools-container">
               <div className="tool-card">
                 <h3>BMI Calculator</h3>
                 <div className="calculator">
                   <div className="calc-input">
-                    <label>Height (cm):</label>
-                    <input
-                      type="number"
-                      value={height}
-                      onChange={(e) => setHeight(e.target.value)}
-                      placeholder="e.g., 165"
-                    />
-                  </div>
-                  <div className="calc-input">
-                    <label>Weight (kg):</label>
+                    <label>Weight (kg)</label>
                     <input
                       type="number"
                       value={weight}
                       onChange={(e) => setWeight(e.target.value)}
-                      placeholder="e.g., 60"
+                      placeholder="Enter weight"
                     />
                   </div>
+
+                  <div className="calc-input">
+                    <label>Height (cm)</label>
+                    <input
+                      type="number"
+                      value={height}
+                      onChange={(e) => setHeight(e.target.value)}
+                      placeholder="Enter height"
+                    />
+                  </div>
+
                   <button className="calc-btn" onClick={calculateBMI}>
                     Calculate BMI
                   </button>
-                  {bmi && (
+
+                  {bmi !== null && (
                     <div className="bmi-result">
                       <h4>Your BMI: {bmi}</h4>
-                      <p className="bmi-category">Category: {bmiCategory}</p>
+                      <div className="bmi-category">{getBMICategory(bmi)}</div>
                       <div className="bmi-info">
                         <small>
-                          • Underweight: &lt; 18.5 <br />
-                          • Normal: 18.5 - 24.9 <br />
-                          • Overweight: 25 - 29.9 <br />• Obese: ≥ 30
+                          <strong>BMI Categories:</strong>
+                          <br />
+                          Underweight: &lt; 18.5
+                          <br />
+                          Normal: 18.5 - 24.9
+                          <br />
+                          Overweight: 25 - 29.9
+                          <br />
+                          Obese: ≥ 30
                         </small>
                       </div>
                     </div>
@@ -602,61 +479,161 @@ const Health = () => {
                 <h3>Health Reminders</h3>
                 <div className="reminders">
                   <div className="reminder-item">
-                    <strong>💧 Hydration Goal:</strong>
-                    <p>Drink 8-10 glasses of water daily</p>
+                    <strong>Annual Checkup</strong>
+                    <p>Schedule your yearly physical exam and screening tests</p>
                   </div>
+
                   <div className="reminder-item">
-                    <strong>💊 Medication Reminder:</strong>
-                    <p>Set alarms for daily vitamins/medications</p>
+                    <strong>Gynecological Exam</strong>
+                    <p>Book your annual pelvic exam and pap smear</p>
                   </div>
+
                   <div className="reminder-item">
-                    <strong>🏥 Annual Check-ups:</strong>
-                    <p>Schedule yearly health screenings</p>
+                    <strong>Mammogram</strong>
+                    <p>If 40+, schedule your annual breast cancer screening</p>
                   </div>
+
                   <div className="reminder-item">
-                    <strong>🩺 Breast Self-Exam:</strong>
-                    <p>Monthly self-examination recommended</p>
+                    <strong>Bone Density Test</strong>
+                    <p>If 65+, or at risk, get osteoporosis screening</p>
+                  </div>
+
+                  <div className="reminder-item">
+                    <strong>Vitamin D Check</strong>
+                    <p>Get your vitamin D levels tested annually</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="health-page">
+      {/* Sidebar Navigation */}
+      <div className={open ? "sidebar open" : "sidebar closed"}>
+        <div className="toggle-btn" onClick={() => setOpen(!open)}>
+          ☰
+        </div>
+
+        <h2 className="sidebar-title">Services</h2>
+
+        <ul>
+          <li className="active">
+            <a href="/health">Health</a>
+          </li>
+          <li>
+            <a href="/dashboard">Education</a>
+          </li>
+          <li>
+            <a href="/dashboard">Safety</a>
+          </li>
+          <li>
+            <a href="/dashboard">Mental Well Being</a>
+          </li>
+          <li>
+            <a href="/dashboard">Financial Independence</a>
+          </li>
+        </ul>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="health-main-content">
+        <div className="health-container">
+          <div className="health-header">
+            <h1>Women's Health Center</h1>
+            <p>Your comprehensive guide to health and wellness</p>
+          </div>
+
+          <div className="health-nav">
+            <button
+              className={activeSection === "overview" ? "active" : ""}
+              onClick={() => setActiveSection("overview")}
+            >
+              Overview
+            </button>
+            <button
+              className={activeSection === "menstrual" ? "active" : ""}
+              onClick={() => setActiveSection("menstrual")}
+            >
+              Menstrual Tracker
+            </button>
+            <button
+              className={activeSection === "fitness" ? "active" : ""}
+              onClick={() => setActiveSection("fitness")}
+            >
+              Fitness & Nutrition
+            </button>
+            <button
+              className={activeSection === "reproductive" ? "active" : ""}
+              onClick={() => setActiveSection("reproductive")}
+            >
+              Reproductive Health
+            </button>
+            <button
+              className={activeSection === "mental" ? "active" : ""}
+              onClick={() => setActiveSection("mental")}
+            >
+              Mental Health
+            </button>
+            <button
+              className={activeSection === "tools" ? "active" : ""}
+              onClick={() => setActiveSection("tools")}
+            >
+              Health Tools
+            </button>
+          </div>
+
+          <div className="health-content">{renderSection()}</div>
+        </div>
       </div>
 
       {/* AI Chatbot */}
-      <div className={`chatbot-container ${isChatOpen ? "open" : ""}`}>
-        <div className="chatbot-header" onClick={() => setIsChatOpen(!isChatOpen)}>
-          <span>🤖 AI Health Assistant</span>
-          <span className="toggle-icon">{isChatOpen ? "▼" : "▲"}</span>
+      <div className={`chatbot-container ${chatOpen ? "open" : ""}`}>
+        <div className="chatbot-header" onClick={() => setChatOpen(!chatOpen)}>
+          <span>💬 Health Assistant</span>
+          <span className="toggle-icon">{chatOpen ? "−" : "+"}</span>
         </div>
-        {isChatOpen && (
+
+        {chatOpen && (
           <div className="chatbot-content">
             <div className="messages-container">
-              {messages.map((msg, index) => (
-                <div key={index} className={`message ${msg.role}`}>
-                  <div className="message-content" style={{ whiteSpace: 'pre-line' }}>
-                    {msg.content}
+              {messages.length === 0 && (
+                <div className="message assistant">
+                  <div className="message-content">
+                    Hello! I'm your health assistant. How can I help you today?
                   </div>
                 </div>
+              )}
+
+              {messages.map((msg, index) => (
+                <div key={index} className={`message ${msg.role}`}>
+                  <div className="message-content">{msg.content}</div>
+                </div>
               ))}
-              {isLoading && (
+
+              {loading && (
                 <div className="message assistant">
                   <div className="message-content typing">Typing...</div>
                 </div>
               )}
-              <div ref={chatEndRef} />
             </div>
+
             <div className="chat-input-container">
               <input
                 type="text"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me anything about women's health..."
-                disabled={isLoading}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                placeholder="Ask about health..."
+                disabled={loading}
               />
-              <button onClick={sendMessage} disabled={isLoading}>
+              <button onClick={sendMessage} disabled={loading}>
                 Send
               </button>
             </div>

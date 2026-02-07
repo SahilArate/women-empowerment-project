@@ -16,8 +16,9 @@ const Dashboard = () => {
         <h2 className="sidebar-title">Services</h2>
 
         <ul>
-          <li><a href="/health">Health</a></li>
-
+          <li>
+            <a href="/health">Health</a>
+          </li>
           <li>Education</li>
           <li>Safety</li>
           <li>Mental Well Being</li>
